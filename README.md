@@ -1,5 +1,10 @@
 # pyractice
 
+## gz_lianjia
+Learn to use Requests and BeautifulSoup, to get Guangzhou house renting information from lianjia.com. The houses information is saved to csv file.
+
+It's a really rough version, only basic function is implemented. To get different results by district or bedroom number, source code should be modified.
+
 
 ## wp2hexo
 Generate simplest blog posts from Wordpress export xml to Hexo (Markdown) files
