@@ -3,7 +3,6 @@ from bs4 import BeautifulSoup
 import csv
 
 soup_cache = {}
-header_flag = False
 
 def get_soup(url):
     global soup_cache
@@ -18,11 +17,9 @@ def get_soup(url):
 
     return soup_cache[url]
 
-
-def make_url(district='all', room='all', page='1'):
-
+def make_url(xiaoqu, district, criteria, page):
     dists = {
-        'all': '',
+        # 'all': '',
         'tianhe': 'tianhe/',
         'yuexiu': 'yuexiu/',
         'liwan': 'liwan/',
@@ -35,30 +32,55 @@ def make_url(district='all', room='all', page='1'):
         'huadu': 'huadu/',
         'nansha': 'nansha/',
     }
+    base_url = 'https://gz.lianjia.com/'
+    base_url += 'xiaoqu/' if xiaoqu else 'zufang/'
+    base_url += dists.get(district, '')
+    if page != '1':
+        base_url += criteria + 'pg' + page + '/'
+    else:
+        if criteria != '':
+            base_url += criteria + '/'
+    return base_url
 
-    rooms = {
-        'all': '',
-        '1': 'l1/',
-        '2': 'l2/',
-        '3': 'l3/',
-        '4': 'l4/',
-        '5': 'l5/',
-        '6': 'l6/',
+def make_searching_criteria(xiaoqu, acceptable_year, area, room_number):
+    years = {
+        '<5': 'y1',
+        '<10': 'y2',
+        '<15': 'y3',
+        '<20': 'y4',
+        '>20': 'y5',
     }
-    return 'https://gz.lianjia.com/zufang/%s%s%s' % (dists.get(district, ''), '' if page == '1' else 'pg' + page ,rooms.get(room, ''))
+    areas = {
+        '80-100': 'ra4',
+        '100-120': 'ra5',
+        '120-144': 'ra6',
+        '>144': 'ra7',
+    }
+    rooms = {
+        '1': 'l1',
+        '2': 'l2',
+        '3': 'l3',
+        '4': 'l4',
+        '5': 'l5',
+        '6': 'l6',
+    }
 
+    if xiaoqu:
+        return years.get(acceptable_year, '')
+    else:
+        return areas.get(area, '') + rooms.get(room_number, '')
 
-def get_house_list(page_url):
-    soup = get_soup(page_url)
-    div_tags = soup.find_all('div', class_='info-panel')
-    houses = [get_house_from_info_panel_div(dt) for dt in div_tags]
-    return houses
-
-def get_max_page(page_url):
-    soup = get_soup(page_url)
+def get_max_page(url):
+    soup = get_soup(url)
     page_info_s = soup.find('div', class_='page-box house-lst-page-box')['page-data']
     page_info = eval(page_info_s)
     return page_info['totalPage']
+
+def get_house_list(url):
+    soup = get_soup(url)
+    div_tags = soup.find_all('div', class_='info-panel')
+    houses = [get_house_from_info_panel_div(dt) for dt in div_tags]
+    return houses
 
 def get_house_from_info_panel_div(tag):
     house_attrs = {}
@@ -83,45 +105,74 @@ def get_house_from_info_panel_div(tag):
     house_attrs['visited_total'] = tag.find('div', class_='square').div.span.string.strip()
     return house_attrs
 
-def get_and_save(url, csvfile):
-    houses = get_house_list(url)
+def get_xiaoqu_list(url):
+    soup = get_soup(url)
+    li_tags = soup.find_all('li', class_='clear xiaoquListItem')
+    xiaoqu_list = [get_xiaoqu_from_li(lt) for lt in li_tags]
+    return xiaoqu_list
+
+def get_xiaoqu_from_li(tag):
+    xiaoqu_attrs = {}
+    xiaoqu_attrs['name'] = tag.find('div', class_='title').a.string
+    xiaoqu_attrs['xiaoqu_url'] = tag.find('div', class_='title').a['href']
+    xiaoqu_attrs['in_rent'] = tag.find('span', class_='cutLine').next_sibling.string
+    if not xiaoqu_attrs['in_rent'].startswith('0'):
+        xiaoqu_attrs['rent_url'] = tag.find('span', class_='cutLine').next_sibling['href']
+    else:
+        xiaoqu_attrs['rent_url'] = ''
+    xiaoqu_attrs['region'] = tag.find('a', class_='district').string
+    xiaoqu_attrs['region_url'] = tag.find('a', class_='district')['href']
+    xiaoqu_attrs['sub_region'] = tag.find('a', class_='bizcircle').string
+    xiaoqu_attrs['sub_region_url'] = tag.find('a', class_='bizcircle')['href']
+    xiaoqu_attrs['trans'] = tag.find('div', class_='tagList').span.string if tag.find('div', class_='tagList').span else 'No Info'
+    return xiaoqu_attrs
+
+def save_to_csv(csvfile, results):
     # 'utf-8' encoding will cause error due to BOM, utf_8_sig is fine. Or with "csvfile.write(codecs.BOM_UTF8)"
-    with open(csvfile, 'a', newline='', encoding='utf_8_sig') as cf:
-        fieldnames = ['code', 'abs_url', 'intro', 'xiaoqu', 'xiaoqu_url', 'zone', 'meters', 'towards', 'region', 'region_url', 'floor', 'year', 'trans', 'haskey-ex', 'decoration-ex', 'price', 'price_update', 'visited_total']
-        writer = csv.DictWriter(cf, fieldnames=fieldnames)
-        global header_flag
-        if not header_flag:
-             writer.writeheader()
-             header_flag = True
-        writer.writerows(houses)
+    with open(csvfile, 'w', newline='', encoding='utf_8_sig') as cf:
+        writer = csv.DictWriter(cf, fieldnames=list(results[0].keys()))
+        writer.writeheader()
+        writer.writerows(results)
 
-
-def process(district, bedrooms, csvfile):
+def collect_houses(district, bedrooms, csvfile):
     # process first page
-    start_url = make_url(district, bedrooms, '1')
-    get_and_save(start_url, csvfile)
+    cr = make_searching_criteria(False, '', '100-120', bedrooms)
+    start_url = make_url(False, district, cr, '1')
+    houses = get_house_list(start_url)
 
     # get total page number from first page
     max_page = get_max_page(start_url)
 
-    print('Page [%s] got and saved. 1/%s' % (start_url, max_page))
+    print('House Page [%s] got. 1/%s' % (start_url, max_page))
 
     # process left pages
     for i in range(2, int(max_page)+1):
-        url = make_url(district, bedrooms, str(i))
-        get_and_save(url, csvfile)
-        print('Page [%s] got and saved. %s/%s' % (url, i, max_page))
+        url = make_url(False, district, cr, str(i))
+        houses += get_house_list(url)
+        print('House Page [%s] got. %s/%s' % (url, i, max_page))
 
+    save_to_csv(csvfile, houses)
     print('All %s bedrooms houses in %s are save.' % (bedrooms, district))
 
+def collect_xiaoqu(district, csvfile, year):
+    cr = make_searching_criteria(True, year, '', '')
+    start_url = make_url(True, district, cr, '1')
+    xiaoqu_list = get_xiaoqu_list(start_url)
+
+    max_page = get_max_page(start_url)
+    print('Xiaoqu Page [%s] got. 1/%s' % (start_url, max_page))
+
+    for i in range(2, int(max_page)+1):
+        url = make_url(True, district, cr, str(i))
+        xiaoqu_list += get_xiaoqu_list(url)
+        print('Xiaoqu Page [%s] got. %s/%s' % (url, i, max_page))
+
+    save_to_csv(csvfile, xiaoqu_list)
+    print('Xiaoqu got and saved.')
 
 def main():
-    # process('yuexiu', '2', 'gz.csv')
-    # process('yuexiu', '3', 'gz.csv')
-    # process('haizhu', '2', 'gz.csv')
-    # process('haizhu', '3', 'gz.csv')
-    # process('tianhe', '2', 'gz.csv')
-    process('tianhe', '3', 'gz.csv')
+    collect_houses('tianhe', '3', 'tianhe_3_bedrooms.csv')
+    collect_xiaoqu('tianhe', 'tianhe_xiaoqu_2008.csv', '<10')
 
 
 if __name__ == '__main__':

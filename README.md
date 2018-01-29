@@ -1,10 +1,17 @@
 # pyractice
 
 ## gz_lianjia
-Learn to use Requests and BeautifulSoup, to get Guangzhou house renting information from lianjia.com. The houses information is saved to csv file.
+Learn to use _Requests_ and _BeautifulSoup_, to get Guangzhou house renting information from lianjia.com. The houses information is saved to csv file.
 
-It's a really rough version, only basic function is implemented. To get different results by district or bedroom number, source code should be modified.
+__Jan 18, 2018__  
+It's a really rough version, only basic function is implemented. To get different results by district or bedroom number, source code should be modified.  
+ex. To get 3-bedroom houses in Tianhe district: ```process('tianhe', '3', 'gz.csv')```
 
+__Jan 29, 2018__  
+Add feature to get xiaoqu list from a district, hence make_url function is also modified.  
+ex. To get 3-bedroom houses in Tianhe district: ```collect_houses('tianhe', '3', 'tianhe_3_bedrooms.csv')```  
+To get Xiaoqu list that established within 10 years in Tianhe district: ```collect_xiaoqu('tianhe', 'tianhe_xiaoqu_2008.csv', '<10')```  
+Still rough too, considering using args parser.
 
 ## wp2hexo
 Generate simplest blog posts from Wordpress export xml to Hexo (Markdown) files
